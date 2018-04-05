@@ -12,6 +12,7 @@
 #define RED_LEDS 5
 #define GREEN_LEDS 6
 #define BLUE_LEDS 11
+#define MAX_CURRENT 15
 
 void setup() {
   Serial.begin(9600);
@@ -29,14 +30,31 @@ float pfc_v, batt_v, ac_i, batt_i;
 int pwmValue,oldPwmValue = 0;
 
 void loop() {
-  while (Serial.available() > 0) {
+  while (Serial.available() > 0) handleSerial();
+  getVolts();
+  if (batt_i > MAX_CURRENT) {
+    pwmValue = constrain(pwmValue - 5,0,255);
+    analogWrite(CHARGE_PWM,pwmValue);
+    oldPwmValue = pwmValue;
+    digitalWrite(RED_LEDS,HIGH);
+    digitalWrite(GREEN_LEDS,HIGH);
+  } else {
+    digitalWrite(GREEN_LEDS,LOW);
+    analogWrite(RED_LEDS,pwmValue);
+  }
 
-    // look for the next valid integer in the incoming serial stream:
-    pwmValue = Serial.parseInt();
-    // look for the newline. That's the end of your
-    // if (Serial.read() == '/n') {
-      if ((pwmValue != oldPwmValue) && (pwmValue < 128)) {
-      pwmValue = constrain(pwmValue, 0, 127);
+  if ( millis() - displayTime > 1000 ) {
+    printDisplay();
+    displayTime = millis();
+  }
+}
+
+void handleSerial() {
+  char inChar = Serial.read(); // read a char
+  if (inChar == 'p') {
+    pwmValue = Serial.parseInt(); // look for the next valid integer in the incoming serial stream:
+    if ((pwmValue != oldPwmValue) && (pwmValue < 256)) {
+      pwmValue = constrain(pwmValue, 0, 255);
       oldPwmValue = pwmValue;
       Serial.println(pwmValue);
       analogWrite(CHARGE_PWM,pwmValue);
@@ -44,11 +62,40 @@ void loop() {
     } else {
       pwmValue = oldPwmValue;
     }
-  }
-  getVolts();
-  if ( millis() - displayTime > 1000 ) {
-    printDisplay();
-    displayTime = millis();
+  } else if (inChar == 'k'){
+    pwmValue = constrain(pwmValue + 1, 0, 255);
+    oldPwmValue = pwmValue;
+    Serial.println(pwmValue);
+    analogWrite(CHARGE_PWM,pwmValue);
+    analogWrite(RED_LEDS,pwmValue);
+  } else if (inChar == 'j'){
+    pwmValue = constrain(pwmValue - 1, 0, 255);
+    oldPwmValue = pwmValue;
+    Serial.println(pwmValue);
+    analogWrite(CHARGE_PWM,pwmValue);
+    analogWrite(RED_LEDS,pwmValue);
+  } else if (inChar == 'K'){
+    pwmValue = constrain(pwmValue + 10, 0, 255);
+    oldPwmValue = pwmValue;
+    Serial.println(pwmValue);
+    analogWrite(CHARGE_PWM,pwmValue);
+    analogWrite(RED_LEDS,pwmValue);
+  } else if (inChar == 'J'){
+    pwmValue = constrain(pwmValue - 10, 0, 255);
+    oldPwmValue = pwmValue;
+    Serial.println(pwmValue);
+    analogWrite(CHARGE_PWM,pwmValue);
+    analogWrite(RED_LEDS,pwmValue);
+  } else if ((inChar >= 'a')&&(inChar <= 'z')) {
+    if (Serial.available() && inChar == Serial.read()) { // only if the same char pressed twice rapidly
+      pwmValue = constrain((inChar - 97) * 11, 0, 255);
+      oldPwmValue = pwmValue;
+      Serial.println(pwmValue);
+      analogWrite(CHARGE_PWM,pwmValue);
+      analogWrite(RED_LEDS,pwmValue);
+    }
+  } else {
+    Serial.println("p### to enter PWMval, j to -1, k to +1, J to -10, K to +10, aa - zz 0 to 255");
   }
 }
 
