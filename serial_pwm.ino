@@ -87,6 +87,7 @@ void handleSerial() {
     analogWrite(CHARGE_PWM,pwmValue);
     analogWrite(RED_LEDS,pwmValue);
   } else if ((inChar >= 'a')&&(inChar <= 'z')) {
+    delay(300); // wait for the user to press the same key again
     if (Serial.available() && inChar == Serial.read()) { // only if the same char pressed twice rapidly
       pwmValue = constrain((inChar - 97) * 11, 0, 255);
       oldPwmValue = pwmValue;
