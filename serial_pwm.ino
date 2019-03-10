@@ -1,11 +1,8 @@
 #define PFC_PLUS A0
 #define BATT_MINUS A1
 #define BATT_I A2
-#define AC_I A4
 #define CHARGE_PWM 9
 #define VOLT_COEFF 2.366
-#define AC_I_COEFF 8.888
-#define AC_I_ZERO 181
 #define BATT_I_COEFF 8.371
 #define BATT_I_ZERO 508.7 // ADC value at zero amps
 #define OVERHEAT_SENSE 12 // gets shorted to ground when overheating
@@ -22,11 +19,11 @@ void setup() {
   pinMode(BLUE_LEDS,OUTPUT);
   digitalWrite(BLUE_LEDS,HIGH);
   digitalWrite(OVERHEAT_SENSE,HIGH);  // enable pullup resistor
-  Serial.println("serial_pwm vancharge");
+  Serial.println("serial_pwm vanhydraulic");
 }
 
 unsigned long displayTime = 0;
-float pfc_v, batt_v, ac_i, batt_i;
+float pfc_v, batt_v, batt_i;
 int pwmValue,oldPwmValue = 0;
 
 void loop() {
@@ -105,11 +102,6 @@ void printDisplay() {
   Serial.print("PWM: ");
   Serial.print(pwmValue);
 
-  Serial.print("  AC_I: ");
-  Serial.print(ac_i,1);
-  Serial.print(" (");
-  Serial.print(averageRead(AC_I));
-
   Serial.print(")  PFC_V: ");
   Serial.print(pfc_v,1);
   Serial.print(" (");
@@ -132,7 +124,6 @@ void getVolts() {
   float batt_minus_v = averageRead(BATT_MINUS) / VOLT_COEFF;
   batt_v = pfc_v - batt_minus_v; // pluses are connected together
   batt_i = ( averageRead(BATT_I) - BATT_I_ZERO ) / BATT_I_COEFF;
-  ac_i = ( averageRead(AC_I) - AC_I_ZERO ) / AC_I_COEFF;
 }
 
 float averageRead(int pin) {
