@@ -1,36 +1,49 @@
-#define PFC_PLUS A0
-#define BATT_MINUS A1
-#define BATT_I A2
+#define CAP_MINUS A0
+#define MOTOR_MINUS A1
+#define MOTOR_I A2
 #define CHARGE_PWM 9
+#define CAPACITOR_PWM 10
 #define VOLT_COEFF 2.366
-#define BATT_I_COEFF 8.371
-#define BATT_I_ZERO 508.7 // ADC value at zero amps
+#define MOTOR_I_COEFF 8.371
+#define MOTOR_I_ZERO 508.7 // ADC value at zero amps
 #define OVERHEAT_SENSE 12 // gets shorted to ground when overheating
 #define RED_LEDS 5
 #define GREEN_LEDS 6
 #define BLUE_LEDS 11
-#define MAX_CURRENT 15
+#define MAX_CURRENT 5
+
+unsigned long displayTime = 0;
+float cap_minus_v, motor_v, motor_i, peak_v;
+int pwmValue = 0;
+int oldPwmValue = 0;
+int capPwmValue = 0;
+
+byte state = 0;
+#define STATE_OFF // engine off, relay open
+#define STATE_PRECHARGE // relay has closed, capacitor precharging
+#define STATE_STARTUP // relay has closed, voltage detected
+#define STATE_RUNNING // relay closed, capacitor charged, start motor
 
 void setup() {
   Serial.begin(9600);
+  setPwmFrequency(9,8); // set pins 9,10 to 4KHz PWM
   pinMode(CHARGE_PWM, OUTPUT);
+  pinMode(CAPACITOR_PWM, OUTPUT);
   pinMode(RED_LEDS,OUTPUT);
   pinMode(GREEN_LEDS,OUTPUT);
   pinMode(BLUE_LEDS,OUTPUT);
-  digitalWrite(BLUE_LEDS,HIGH);
+  analogWrite(BLUE_LEDS,5);
   digitalWrite(OVERHEAT_SENSE,HIGH);  // enable pullup resistor
   Serial.println("serial_pwm vanhydraulic");
+  getVolts();
+  peak_v = motor_v; // record voltage of system upon startup
 }
-
-unsigned long displayTime = 0;
-float pfc_v, batt_v, batt_i;
-int pwmValue,oldPwmValue = 0;
 
 void loop() {
   while (Serial.available() > 0) handleSerial();
   getVolts();
-  if (batt_i > MAX_CURRENT) {
-    pwmValue = constrain(pwmValue - 5,0,255);
+  if (motor_i > MAX_CURRENT) {
+    pwmValue = 0; //constrain(pwmValue - 5,0,255);
     analogWrite(CHARGE_PWM,pwmValue);
     oldPwmValue = pwmValue;
     digitalWrite(RED_LEDS,HIGH);
@@ -48,6 +61,15 @@ void loop() {
 
 void handleSerial() {
   char inChar = Serial.read(); // read a char
+  if (inChar == 'c') { // set capacitor PWM
+    int inInt = Serial.parseInt(); // look for the next valid integer in the incoming serial stream:
+    if ((inInt != capPwmValue) && (inInt < 256)) {
+      capPwmValue = constrain(inInt, 0, 255);
+      Serial.println(capPwmValue);
+      analogWrite(CAPACITOR_PWM,capPwmValue);
+      analogWrite(BLUE_LEDS,capPwmValue);
+    }
+  }
   if (inChar == 'p') {
     pwmValue = Serial.parseInt(); // look for the next valid integer in the incoming serial stream:
     if ((pwmValue != oldPwmValue) && (pwmValue < 256)) {
@@ -99,31 +121,33 @@ void handleSerial() {
 
 void printDisplay() {
   if (!digitalRead(OVERHEAT_SENSE)) Serial.println("OVERHEATING!  ");
-  Serial.print("PWM: ");
+  Serial.print("pwmValue: ");
   Serial.print(pwmValue);
 
-  Serial.print(")  PFC_V: ");
-  Serial.print(pfc_v,1);
-  Serial.print(" (");
-  Serial.print(averageRead(PFC_PLUS));
+  Serial.print("  capPwmValue: ");
+  Serial.print(capPwmValue);
 
-  Serial.print(")  BATT_V: ");
-  Serial.print(batt_v,1);
+  Serial.print("  CAP_MINUS_V: ");
+  Serial.print(cap_minus_v,1);
   Serial.print(" (");
-  Serial.print(averageRead(BATT_MINUS));
+  Serial.print(averageRead(CAP_MINUS));
 
-  Serial.print(")  BATT_I: ");
-  Serial.print(batt_i,1);
+  Serial.print(")  MOTOR_V: ");
+  Serial.print(motor_v,1);
   Serial.print(" (");
-  Serial.print(averageRead(BATT_I));
+  Serial.print(averageRead(MOTOR_MINUS));
+
+  Serial.print(")  MOTOR_I: ");
+  Serial.print(motor_i,1);
+  Serial.print(" (");
+  Serial.print(averageRead(MOTOR_I));
   Serial.println(")");
 }
 
 void getVolts() {
-  pfc_v = averageRead(PFC_PLUS) / VOLT_COEFF;
-  float batt_minus_v = averageRead(BATT_MINUS) / VOLT_COEFF;
-  batt_v = pfc_v - batt_minus_v; // pluses are connected together
-  batt_i = ( averageRead(BATT_I) - BATT_I_ZERO ) / BATT_I_COEFF;
+  cap_minus_v = averageRead(CAP_MINUS) / VOLT_COEFF;
+  motor_v = averageRead(MOTOR_MINUS) / VOLT_COEFF;
+  motor_i = ( averageRead(MOTOR_I) - MOTOR_I_ZERO ) / MOTOR_I_COEFF;
 }
 
 float averageRead(int pin) {
